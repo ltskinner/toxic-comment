@@ -10,22 +10,6 @@ import pandas as pd
 import tensorflow as tf 
 
 
-#batch_size = 128
-#embedding_dimension = 64
-#num_classes = 2
-hidden_layer_size = 32
-#times_steps = 6
-#element_size = 1
-
-#num_layers = 3
-num_classes = 6 #2
-batch_size = 32
-post_size = seq_len = 128 # times_steps
-vec_size = 300 # embedding_dimension
-#n_hidden = 512 # number of units in RNN cell
-#learning_rate = .001
-
-
 """
 # Preprocessing Zero Padding..... lame as shit but I suppose its what you have todo to get consistancy
 
@@ -121,10 +105,40 @@ df = pd.read_csv(os.getcwd() + "\\" + what + ".csv")
 #df = pd.read_csv(os.getcwd() + "\\" + what + "-sample.csv", nrows=5000)
 #print(len(df["comment_text"]))
 
+#batch_size = 128
+#embedding_dimension = 64
+#num_classes = 2
+hidden_layer_size = 32
+#times_steps = 6
+#element_size = 1
+
+#num_layers = 3
+num_classes = 6 #6 #2
+batch_size = 32
+post_size = seq_len = 128 # times_steps
+vec_size = 300 # embedding_dimension
+#n_hidden = 512 # number of units in RNN cell
+#learning_rate = .001
+
+
+
 train_x = list(df["comment_text"])
 #train_y = list(zip(df["toxic"], df["insult"]))
 train_y = list(zip(df["toxic"], df["severe_toxic"], df["obscene"], df["threat"], df["insult"], df["identity_hate"]))
 print("[+] Imports Complete [+]")
+
+
+tdf = pd.read_csv(os.getcwd() + "\\test.csv", nrows=20)
+names = list(tdf["id"])
+test_x = list(tdf["comment_text"])
+
+tdft = pd.read_csv(os.getcwd() + "\\test_labels.csv", nrows=20)
+test_y = list(zip(tdft["toxic"], tdft["severe_toxic"], tdft["obscene"], tdft["threat"], tdft["insult"], tdft["identity_hate"]))
+
+def vector_inspector(word):
+
+    if np.isnan(np.sum(word.vector)):
+        print("HUGE PROBLEM:", word.text)
 
 
 def meaterizer(train_x, nlp):
@@ -133,13 +147,19 @@ def meaterizer(train_x, nlp):
     for i in train_x:
         buff = []
         doc = nlp(i)
+        """
+        for word in doc:
+            vector_inspector(word)
+        """
 
         if len(doc) == post_size: 
             #print("Even")
             seqlens.append(post_size)
 
+            
             for word in doc:
                 buff.append(word.vector)
+            
 
         elif len(doc) > post_size:
             #print("Long")
@@ -173,6 +193,13 @@ def meaterizer(train_x, nlp):
             
 
         frame.append(buff)
+    """
+    for post in frame:
+        for word in post:
+            if len(word) != 300:
+                print("EVEN MORE MASSIVE PROBLEM")
+    """
+
     return frame, seqlens
 
 
@@ -180,18 +207,22 @@ def meaterizer(train_x, nlp):
 #print("AVG:", int(sum(sizes)/len(sizes)))
 
 def get_batch(batch_size, data_x, data_y, nlp):
+    #print("Fre$h batch")
     instance_indecies = list(range(len(data_x)))
     np.random.shuffle(instance_indecies)
     batch = instance_indecies[:batch_size] 
 
     x, seqlens = meaterizer([data_x[i] for i in batch], nlp)
     y = [data_y[i] for i in batch]
-
-    return np.array(x), np.array(y), np.array(seqlens)
-
-
+    #print("Successfully made it.")
+    return np.nan_to_num(np.array(x)), np.nan_to_num(np.array(y)), np.nan_to_num(np.array(seqlens))
 
 
+
+
+def get_test(data, nlp):
+    x, seqlens = meaterizer([data], nlp)
+    return np.array(x), np.array(seqlens)
 
 
 
@@ -207,21 +238,11 @@ def get_batch(batch_size, data_x, data_y, nlp):
 
 
 
-_inputs = tf.placeholder(tf.int32, shape=[batch_size, post_size])
-_labels = tf.placeholder(tf.float32, shape=[batch_size, num_classes])
+#_inputs = tf.placeholder(tf.int32, shape=[batch_size, post_size])
+_labels = tf.placeholder(tf.float32, shape=[None, num_classes]) # batch_size
+_seqlens = tf.placeholder(tf.int32, shape=[None]) # batch_size
 
-# seqlens for dynamic calculation
-_seqlens = tf.placeholder(tf.int32, shape=[batch_size])
-
-#---------------------------- By this point, all the text data has been encoded to lists of words ids
-#---------------------------- aka ATOMIC representation. Note, not scalable for training deep learning models
-"""
-with tf.name_scope("embeddings"):
-    embeddings = tf.Variable(tf.random_uniform([vocabulary_size, embedding_dimension], -1.0, 1.0), name='embedding')
-    embed = tf.nn.embedding_lookup(embeddings, _inputs)
-    print(embed.shape)
-""" 
-embed = tf.placeholder(tf.float32, shape=[batch_size, seq_len, vec_size])
+embed = tf.placeholder(tf.float32, shape=[None, seq_len, vec_size])
 
 # --------------------------------------------- LSTM Stuff ---------------------------------------------------
 
@@ -229,65 +250,117 @@ with tf.variable_scope("lstm"):
     lstm_cell = tf.contrib.rnn.BasicLSTMCell(hidden_layer_size, forget_bias=1.0) # Basic LSTM Cell yo
     outputs, states = tf.nn.dynamic_rnn(lstm_cell, embed, sequence_length=_seqlens, dtype=tf.float32)
 
-weights = {
-    'linear_layer': tf.Variable(tf.truncated_normal([hidden_layer_size, num_classes], mean=0, stddev=0.1))
-}
+weights = { 'linear_layer': tf.Variable(tf.truncated_normal([hidden_layer_size, num_classes], mean=0, stddev=0.01))}
 
-biases = {
-    'linear_layer':tf.Variable(tf.truncated_normal([num_classes], mean=0, stddev=0.1))
-}
+biases = { 'linear_layer':tf.Variable(tf.truncated_normal([num_classes], mean=0, stddev=0.01)) }
+# ---------------------------------------------------------------------------------------------------------
 
 # Extract the last relevant output and use in linear layer
-final_output = tf.matmul(states[1], weights["linear_layer"]) + biases["linear_layer"]
-softmax = tf.nn.softmax_cross_entropy_with_logits(logits=final_output, labels=_labels)
-cross_entropy = tf.reduce_mean(softmax)
-
-
-#---------------------------------------------
-"""
-num_LSTM_layers = 2
-with tf.variable_scope("lstm"):
-    lstm_cell = tf.contrib.nn.BasicLSTMCell(hidden_layer_size, forget_bias=1.0)
-    cell = tf.contrib.rnn,
-"""
-#--------------------------------------------------------------------------------------------------------------
+#final_output = tf.matmul(states[1], weights["linear_layer"]) + biases["linear_layer"]
+final_output = tf.add(tf.matmul(states[1], weights["linear_layer"]), biases["linear_layer"])
+pred = tf.nn.sigmoid_cross_entropy_with_logits(logits=final_output, labels=_labels)
+#pred = tf.nn.sigmoid(labels=_labels, logits=final_output)
+#softmax = tf.nn.softmax_cross_entropy_with_logits(logits=final_output, labels=_labels)
+#y = tf.nn.softmax(final_output)
+cross_entropy = tf.reduce_mean(pred) # cost, loss
 
 # ---------------------------- Training Embeddings and the LSTM Classifier ------------------------------------
-
+"""
+# Original
+train_step = tf.train.RMSPropOptimizer(0.001, 0.9, centered=True).minimize(cross_entropy)
+"""
 train_step = tf.train.RMSPropOptimizer(0.001, 0.9).minimize(cross_entropy)
+#grads_and_vars = train_Step.compute_gradients(cross_entropy, )
+"""
+optimizer = tf.train.GradientDescentOptimizer(.01)
+gradients, variables = zip(*optimizer.compute_gradients(cross_entropy))
+gradients, _ = tf.clip_by_global_norm(gradients, 5.0)
+train_step = optimizer.apply_gradients(zip(gradients, variables)) #https://stackoverflow.com/questions/36498127/how-to-apply-gradient-clipping-in-tensorflow/43486487
+"""
+#train_step = tf.abs([1])
+#train_step = tf.train.AdamOptimizer().minimize(cross_entropy)
 
 correct_prediction = tf.equal(tf.argmax(_labels, 1), tf.argmax(final_output, 1))
 accuracy = (tf.reduce_mean(tf.cast(correct_prediction, tf.float32)))*100
-
-
-
+"""
+correct = tf.equal(final_output, tf.equal(_labels,1.0))
+accuracy = tf.reduce_mean( tf.cast(correct, 'float') )
+"""
+#---------------------------------------------------------------------------------------
 #-----------------------------------------------------------------------------------------------------------------------------------
 with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
+    ct = 0
+    for step in range(250): #arb num of training epochs i reckon
+        """
+        print("count:", ct)
+        ct += 1
+        w = sess.run(weights)
+        print(w)
+        b = sess.run(biases)
+        print(b)
+        """
+        x_batch, y_batch, seqlen_batch = get_batch(128, train_x, train_y, nlp)
+        """
+        for i in x_batch:
+            for j in i:
+                for k in np.isnan(j):
+                    if k == True:
+                        print("HUGE PROBLEM X")
+        for i in y_batch:
+            for j in np.isnan(i):
+                if j == True:
+                    print("HUGE PROBLEM Y")
+        """
 
-    for step in range(1000): #arb num of training epochs i reckon
-        x_batch, y_batch, seqlen_batch = get_batch(batch_size, train_x, train_y, nlp)
+        #print("X:", x_batch[0])
+        #print("Y:", y_batch[0])
         #print("new xbatch ------>")
         #print(x_batch)
+        """
+        for i in x_batch:
+            print("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
+            print(i)
+            print("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
+        """
+        #print("Pre sess.run, shapes:")
+        #print(x_batch.shape)
+        #print(y_batch.shape)
+        #print(seqlen_batch.shape)
+        
         sess.run(train_step, feed_dict={embed:x_batch, _labels:y_batch, _seqlens:seqlen_batch})
-
-
+        """
+        print(fin)
+        print("-----------")
+        print(state)
+        print("-----------")
+        """
+        #print("Pre step")
         if step % 5 == 0:
-            acc = sess.run(accuracy, feed_dict={embed:x_batch, _labels:y_batch, _seqlens:seqlen_batch})
+            acc, aut = sess.run([accuracy, final_output], feed_dict={embed:x_batch, _labels:y_batch, _seqlens:seqlen_batch})
+            for i in range(5):
+                print(y_batch[i], aut[i])
+
             print("Accuracy at %d: %.5f" % (step, acc))
         
 
-    """    
-    for test_batch in range(5):
-        x_test, y_test, seqlen_test = get_sentence_batch(batch_size, test_x, test_y, test_seqlens)
-
-        batch_pred, batch_acc = sess.run([tf.argmax(final_output, 1), accuracy],
-                                            feed_dict={_inputs:x_test, _labels:y_test, _seqlens:seqlen_test})
-        print("Test batch accuracy %d: %.5f" % (test_batch, batch_acc))
-
-    output_example = sess.run([outputs], feed_dict={_inputs:x_test, _labels:y_test, _seqlens:seqlen_test})
-    states_example = sess.run([states[1]], feed_dict={_inputs:x_test, _labels:y_test, _seqlens:seqlen_test})
-    """
-
-
-
+    #----------------------------------
+    
+    for i in range(len(test_x)):
+        #print(i)
+        in_x, sq_len = get_test(test_x[i], nlp)
+        #print(in_x)
+        #print(sq_len)
+        
+        #print(names[i])
+        #print("x_len", in_x)
+        #print("x_len", len(in_x[0]))
+        #print("sq:", sq_len)
+        
+        
+        #classification = sess.run(y, feed_dict={embed: in_x, _seqlens:sq_len})
+        #print(classification.shape)
+        #print(classification)
+        
+        output_example = sess.run(final_output, feed_dict={embed:in_x, _seqlens:sq_len})
+        print(test_y[i], "|", output_example)
