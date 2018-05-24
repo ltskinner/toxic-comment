@@ -170,6 +170,7 @@ biases = { 'linear_layer':tf.Variable(tf.truncated_normal([num_classes], mean=0,
 #final_output = tf.matmul(states[1], weights["linear_layer"]) + biases["linear_layer"]
 final_output = tf.add(tf.matmul(states[1], weights["linear_layer"]), biases["linear_layer"])
 pred = tf.nn.sigmoid_cross_entropy_with_logits(logits=final_output, labels=_labels)
+final_output_sig = tf.sigmoid(final_output)
 #pred = tf.nn.sigmoid(labels=_labels, logits=final_output)
 #softmax = tf.nn.softmax_cross_entropy_with_logits(logits=final_output, labels=_labels)
 #y = tf.nn.softmax(final_output)
@@ -180,14 +181,14 @@ cross_entropy = tf.reduce_mean(pred) # cost, loss
 # Original
 train_step = tf.train.RMSPropOptimizer(0.001, 0.9, centered=True).minimize(cross_entropy)
 """
-#train_step = tf.train.RMSPropOptimizer(0.001, 0.9).minimize(cross_entropy)
+train_step = tf.train.RMSPropOptimizer(0.001, 0.9).minimize(cross_entropy)
 #grads_and_vars = train_Step.compute_gradients(cross_entropy, )
-
+"""
 optimizer = tf.train.GradientDescentOptimizer(.01)
 gradients, variables = zip(*optimizer.compute_gradients(cross_entropy))
 gradients, _ = tf.clip_by_global_norm(gradients, 5.0)
 train_step = optimizer.apply_gradients(zip(gradients, variables)) #https://stackoverflow.com/questions/36498127/how-to-apply-gradient-clipping-in-tensorflow/43486487
-
+"""
 #train_step = tf.abs([1])
 #train_step = tf.train.AdamOptimizer().minimize(cross_entropy)
 
@@ -211,7 +212,7 @@ with tf.Session() as sess:
         b = sess.run(biases)
         print(b)
         """
-        x_batch, y_batch, seqlen_batch = get_batch(256, train_x, train_y, nlp)
+        x_batch, y_batch, seqlen_batch = get_batch(512, train_x, train_y, nlp)
         """
         for i in x_batch:
             for j in i:
@@ -241,7 +242,7 @@ with tf.Session() as sess:
         
         sess.run(train_step, feed_dict={embed:x_batch, _labels:y_batch, _seqlens:seqlen_batch})
         sess.run(train_step, feed_dict={embed:x_batch, _labels:y_batch, _seqlens:seqlen_batch})
-        sess.run(train_step, feed_dict={embed:x_batch, _labels:y_batch, _seqlens:seqlen_batch})
+        #sess.run(train_step, feed_dict={embed:x_batch, _labels:y_batch, _seqlens:seqlen_batch})
         """
         print(fin)
         print("-----------")
@@ -250,7 +251,7 @@ with tf.Session() as sess:
         """
         #print("Pre step")
         if step % 5 == 0:
-            acc, aut = sess.run([accuracy, final_output], feed_dict={embed:x_batch, _labels:y_batch, _seqlens:seqlen_batch})
+            acc, aut = sess.run([accuracy, final_output_sig], feed_dict={embed:x_batch, _labels:y_batch, _seqlens:seqlen_batch})
             
             for i in range(5):
                 print(y_batch[i], aut[i])
@@ -276,5 +277,5 @@ with tf.Session() as sess:
         #print(classification.shape)
         #print(classification)
         
-        output_example = sess.run(final_output, feed_dict={embed:in_x, _seqlens:sq_len})
+        output_example = sess.run(final_output_sig, feed_dict={embed:in_x, _seqlens:sq_len})
         print(test_y[i], "|", output_example)
