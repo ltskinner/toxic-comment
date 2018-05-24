@@ -128,11 +128,11 @@ train_y = list(zip(df["toxic"], df["severe_toxic"], df["obscene"], df["threat"],
 print("[+] Imports Complete [+]")
 
 
-tdf = pd.read_csv(os.getcwd() + "\\test.csv", nrows=20)
+tdf = pd.read_csv(os.getcwd() + "\\test.csv", nrows=100)
 names = list(tdf["id"])
 test_x = list(tdf["comment_text"])
 
-tdft = pd.read_csv(os.getcwd() + "\\test_labels.csv", nrows=20)
+tdft = pd.read_csv(os.getcwd() + "\\test_labels.csv", nrows=100)
 test_y = list(zip(tdft["toxic"], tdft["severe_toxic"], tdft["obscene"], tdft["threat"], tdft["insult"], tdft["identity_hate"]))
 
 def vector_inspector(word):
@@ -269,14 +269,14 @@ cross_entropy = tf.reduce_mean(pred) # cost, loss
 # Original
 train_step = tf.train.RMSPropOptimizer(0.001, 0.9, centered=True).minimize(cross_entropy)
 """
-train_step = tf.train.RMSPropOptimizer(0.001, 0.9).minimize(cross_entropy)
+#train_step = tf.train.RMSPropOptimizer(0.001, 0.9).minimize(cross_entropy)
 #grads_and_vars = train_Step.compute_gradients(cross_entropy, )
-"""
+
 optimizer = tf.train.GradientDescentOptimizer(.01)
 gradients, variables = zip(*optimizer.compute_gradients(cross_entropy))
 gradients, _ = tf.clip_by_global_norm(gradients, 5.0)
 train_step = optimizer.apply_gradients(zip(gradients, variables)) #https://stackoverflow.com/questions/36498127/how-to-apply-gradient-clipping-in-tensorflow/43486487
-"""
+
 #train_step = tf.abs([1])
 #train_step = tf.train.AdamOptimizer().minimize(cross_entropy)
 
@@ -300,7 +300,7 @@ with tf.Session() as sess:
         b = sess.run(biases)
         print(b)
         """
-        x_batch, y_batch, seqlen_batch = get_batch(128, train_x, train_y, nlp)
+        x_batch, y_batch, seqlen_batch = get_batch(256, train_x, train_y, nlp)
         """
         for i in x_batch:
             for j in i:
@@ -329,6 +329,8 @@ with tf.Session() as sess:
         #print(seqlen_batch.shape)
         
         sess.run(train_step, feed_dict={embed:x_batch, _labels:y_batch, _seqlens:seqlen_batch})
+        sess.run(train_step, feed_dict={embed:x_batch, _labels:y_batch, _seqlens:seqlen_batch})
+        sess.run(train_step, feed_dict={embed:x_batch, _labels:y_batch, _seqlens:seqlen_batch})
         """
         print(fin)
         print("-----------")
@@ -338,9 +340,10 @@ with tf.Session() as sess:
         #print("Pre step")
         if step % 5 == 0:
             acc, aut = sess.run([accuracy, final_output], feed_dict={embed:x_batch, _labels:y_batch, _seqlens:seqlen_batch})
+            
             for i in range(5):
                 print(y_batch[i], aut[i])
-
+            
             print("Accuracy at %d: %.5f" % (step, acc))
         
 
