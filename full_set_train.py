@@ -229,43 +229,34 @@ times = 6000
 with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
     ct = 0
-    for step in range(0, len(train_x), batch): #arb num of training epochs i reckon
+    for e in range(3):
+        for step in range(0, len(train_x), batch): #arb num of training epochs i reckon
 
-        #x_batch, y_batch, seqlen_batch = get_random_batch(batch, train_x, train_y, nlp)
-        x_batch, y_batch, seqlen_batch = get_seq_batch(step, batch, train_x, train_y, nlp)
-        
-        sess.run(train_step, feed_dict={embed:x_batch, _labels:y_batch, _seqlens:seqlen_batch})
-   
-        if step % 5 == 0:
-            acc, aut = sess.run([accuracy, final_output_sig], feed_dict={embed:x_batch, _labels:y_batch, _seqlens:seqlen_batch})
+            #x_batch, y_batch, seqlen_batch = get_random_batch(batch, train_x, train_y, nlp)
+            x_batch, y_batch, seqlen_batch = get_seq_batch(step, batch, train_x, train_y, nlp)
             
-            for i in range(5):
-                print(y_batch[i], aut[i])
-            
-            print(str(step) + '/' + str(len(train_x)) + " R1 SEQ: Accuracy at %d: %.5f" % (step, acc))
+            sess.run(train_step, feed_dict={embed:x_batch, _labels:y_batch, _seqlens:seqlen_batch})
+    
+            if step % 5 == 0:
+                acc, aut = sess.run([accuracy, final_output_sig], feed_dict={embed:x_batch, _labels:y_batch, _seqlens:seqlen_batch})
+                
+                for i in range(5):
+                    print(y_batch[i], aut[i])
+                
+                print(str(step) + '/' + str(len(train_x)) + " R" + str(e) + " SEQ: Accuracy at %d: %.5f" % (step, acc))
      
-    for step in range(0, len(train_x), batch):
-        x_batch, y_batch, seqlen_batch = get_seq_batch(step, batch, train_x, train_y, nlp)
-        sess.run(train_step, feed_dict={embed:x_batch, _labels:y_batch, _seqlens:seqlen_batch})
-        if step % 5 == 0:
-            acc, aut = sess.run([accuracy, final_output_sig], feed_dict={embed:x_batch, _labels:y_batch, _seqlens:seqlen_batch})
-            
-            for i in range(5):
-                print(y_batch[i], aut[i])
-            
-            print(str(step) + '/' + str(len(train_x)) + " R2 SEQ: Accuracy at %d: %.5f" % (step, acc))
 
-    ran_ct = 2000
-    for step in range(ran_ct):
-        x_batch, y_batch, seqlen_batch = get_random_batch(batch, train_x, train_y, nlp)
-        sess.run(train_step, feed_dict={embed:x_batch, _labels:y_batch, _seqlens:seqlen_batch})
-        if step % 5 == 0:
-            acc, aut = sess.run([accuracy, final_output_sig], feed_dict={embed:x_batch, _labels:y_batch, _seqlens:seqlen_batch})
-            
-            for i in range(5):
-                print(y_batch[i], aut[i])
-            
-            print(str(step) + '/' + str(ran_ct) + " R3 RAN: Accuracy at %d: %.5f" % (step, acc))
+        ran_ct = 2000
+        for step in range(ran_ct):
+            x_batch, y_batch, seqlen_batch = get_random_batch(batch, train_x, train_y, nlp)
+            sess.run(train_step, feed_dict={embed:x_batch, _labels:y_batch, _seqlens:seqlen_batch})
+            if step % 5 == 0:
+                acc, aut = sess.run([accuracy, final_output_sig], feed_dict={embed:x_batch, _labels:y_batch, _seqlens:seqlen_batch})
+                
+                for i in range(5):
+                    print(y_batch[i], aut[i])
+                
+                print(str(step) + '/' + str(ran_ct) + " R" + str(e) + " RAN: Accuracy at %d: %.5f" % (step, acc))
 
     #--------------------------------------------------------------------------------------------------------------------------------
     del train_x
