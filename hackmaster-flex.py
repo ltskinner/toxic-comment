@@ -1,5 +1,7 @@
 
 import os
+import csv
+
 import numpy as np 
 import pandas as pd
 import tensorflow as tf 
@@ -38,13 +40,14 @@ train_x = list(df["comment_text"])
 train_y = list(zip(df["toxic"], df["severe_toxic"], df["obscene"], df["threat"], df["insult"], df["identity_hate"]))
 print("[+] Imports Complete [+]")
 
-
-tdf = pd.read_csv(os.getcwd() + "\\test.csv", nrows=100)
+"""
+tdf = pd.read_csv(os.getcwd() + "\\test.csv") #, nrows=100)
 names = list(tdf["id"])
 test_x = list(tdf["comment_text"])
 
 tdft = pd.read_csv(os.getcwd() + "\\test_labels.csv", nrows=100)
 test_y = list(zip(tdft["toxic"], tdft["severe_toxic"], tdft["obscene"], tdft["threat"], tdft["insult"], tdft["identity_hate"]))
+"""
 
 def vector_inspector(word):
 
@@ -132,10 +135,20 @@ def get_batch(batch_size, data_x, data_y, nlp):
 
 
 def get_test(data, nlp):
-    x, seqlens = meaterizer([data], nlp)
-    return np.array(x), np.array(seqlens)
+    x, seqlens = meaterizer(data, nlp)
+    return np.nan_to_num(np.array(x)), np.nan_to_num(np.array(seqlens))
 
 
+def csvWriteRow(yuuge_list, filename):
+    if '.csv' not in filename:
+        filename = filename + '.csv'
+
+    with open(filename, 'w', newline='') as csv_file:
+        writer = csv.writer(csv_file, delimiter=',')
+        for line in yuuge_list:
+            writer.writerow(line)
+    
+    print('[+] Successfully exported data to', filename, '[+]\n')
 
 
 #----------------------------------------------------------------------------------------------------------------------------------
@@ -146,14 +159,14 @@ def get_test(data, nlp):
 
 
 
-
-
+h = ['id',' toxic', 'severe_toxic', 'obscene', 'threat', 'insult', 'identity_hate']
+outframe = [h]
 
 #_inputs = tf.placeholder(tf.int32, shape=[batch_size, post_size])
-_labels = tf.placeholder(tf.float32, shape=[None, num_classes]) # batch_size
-_seqlens = tf.placeholder(tf.int32, shape=[None]) # batch_size
+_labels = tf.placeholder(tf.float32, shape=[None, num_classes], name='labels') # batch_size
+_seqlens = tf.placeholder(tf.int32, shape=[None], name='seqlens') # batch_size
 
-embed = tf.placeholder(tf.float32, shape=[None, seq_len, vec_size])
+embed = tf.placeholder(tf.float32, shape=[None, seq_len, vec_size], name='embed')
 
 # --------------------------------------------- LSTM Stuff ---------------------------------------------------
 
@@ -161,16 +174,16 @@ with tf.variable_scope("lstm"):
     lstm_cell = tf.contrib.rnn.BasicLSTMCell(hidden_layer_size, forget_bias=1.0) # Basic LSTM Cell yo
     outputs, states = tf.nn.dynamic_rnn(lstm_cell, embed, sequence_length=_seqlens, dtype=tf.float32)
 
-weights = { 'linear_layer': tf.Variable(tf.truncated_normal([hidden_layer_size, num_classes], mean=0, stddev=0.01))}
+weights =  tf.Variable(tf.truncated_normal([hidden_layer_size, num_classes], mean=0, stddev=0.01), name="weights")
 
-biases = { 'linear_layer':tf.Variable(tf.truncated_normal([num_classes], mean=0, stddev=0.01)) }
+biases = tf.Variable(tf.truncated_normal([num_classes], mean=0, stddev=0.01), name="biases") 
 # ---------------------------------------------------------------------------------------------------------
 
 # Extract the last relevant output and use in linear layer
 #final_output = tf.matmul(states[1], weights["linear_layer"]) + biases["linear_layer"]
-final_output = tf.add(tf.matmul(states[1], weights["linear_layer"]), biases["linear_layer"])
+final_output = tf.add(tf.matmul(states[1], weights), biases)
 pred = tf.nn.sigmoid_cross_entropy_with_logits(logits=final_output, labels=_labels)
-final_output_sig = tf.sigmoid(final_output)
+final_output_sig = tf.sigmoid(final_output, name="final_output_sig")
 #pred = tf.nn.sigmoid(labels=_labels, logits=final_output)
 #softmax = tf.nn.softmax_cross_entropy_with_logits(logits=final_output, labels=_labels)
 #y = tf.nn.softmax(final_output)
@@ -198,12 +211,17 @@ accuracy = (tf.reduce_mean(tf.cast(correct_prediction, tf.float32)))*100
 correct = tf.equal(final_output, tf.equal(_labels,1.0))
 accuracy = tf.reduce_mean( tf.cast(correct, 'float') )
 """
+
+saver = tf.train.Saver()
 #---------------------------------------------------------------------------------------
 #-----------------------------------------------------------------------------------------------------------------------------------
+
+batch = 256
+times = 2000
 with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
     ct = 0
-    for step in range(250): #arb num of training epochs i reckon
+    for step in range(times): #arb num of training epochs i reckon
         """
         print("count:", ct)
         ct += 1
@@ -212,7 +230,7 @@ with tf.Session() as sess:
         b = sess.run(biases)
         print(b)
         """
-        x_batch, y_batch, seqlen_batch = get_batch(512, train_x, train_y, nlp)
+        x_batch, y_batch, seqlen_batch = get_batch(batch, train_x, train_y, nlp)
         """
         for i in x_batch:
             for j in i:
@@ -242,7 +260,7 @@ with tf.Session() as sess:
         
         sess.run(train_step, feed_dict={embed:x_batch, _labels:y_batch, _seqlens:seqlen_batch})
         sess.run(train_step, feed_dict={embed:x_batch, _labels:y_batch, _seqlens:seqlen_batch})
-        #sess.run(train_step, feed_dict={embed:x_batch, _labels:y_batch, _seqlens:seqlen_batch})
+        sess.run(train_step, feed_dict={embed:x_batch, _labels:y_batch, _seqlens:seqlen_batch})
         """
         print(fin)
         print("-----------")
@@ -260,10 +278,20 @@ with tf.Session() as sess:
         
 
     #----------------------------------
-    
-    for i in range(len(test_x)):
+    del train_x
+    del train_y
+
+    tdf = pd.read_csv(os.getcwd() + "\\test.csv", nrows=500)
+    names = list(tdf["id"])
+    test_x = list(tdf["comment_text"])
+
+    tdft = pd.read_csv(os.getcwd() + "\\test_labels.csv")
+    test_y = list(zip(tdft["toxic"], tdft["severe_toxic"], tdft["obscene"], tdft["threat"], tdft["insult"], tdft["identity_hate"]))
+
+    step = batch
+    for i in range(0, len(test_x), step):
         #print(i)
-        in_x, sq_len = get_test(test_x[i], nlp)
+        in_x, sq_len = get_test(test_x[i:i+step], nlp)
         #print(in_x)
         #print(sq_len)
         
@@ -272,10 +300,24 @@ with tf.Session() as sess:
         #print("x_len", len(in_x[0]))
         #print("sq:", sq_len)
         
-        
         #classification = sess.run(y, feed_dict={embed: in_x, _seqlens:sq_len})
         #print(classification.shape)
         #print(classification)
         
         output_example = sess.run(final_output_sig, feed_dict={embed:in_x, _seqlens:sq_len})
+        #ys = test_y[i:i+step]
+        for j in range(len(output_example)):
+            #print(ys[j], "|", output_example[j])
+            buffer = [names[i+j]]
+            buffer.extend(output_example[j])
+            outframe.append(buffer)
+
+        """
         print(test_y[i], "|", output_example)
+        buffer = [names[i]]
+        buffer.extend(output_example)
+        outframe.append(buffer)
+        """
+    
+    csvWriteRow(outframe, "test_sub_" + str(batch) + "_" + str(times) + "_3.csv")
+    saver.save(sess, os.getcwd() + '/model/test_save_lmao')
