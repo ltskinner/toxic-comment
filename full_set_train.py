@@ -23,14 +23,14 @@ df = pd.read_csv(os.getcwd() + "\\" + what + ".csv")
 #batch_size = 128
 #embedding_dimension = 64
 #num_classes = 2
-hidden_layer_size = 32
+hidden_layer_size = 515
 #times_steps = 6
 #element_size = 1
 
 #num_layers = 3
 num_classes = 6 #6 #2
 batch_size = 32
-post_size = seq_len = 128 # times_steps
+post_size = seq_len = 300 # times_steps
 vec_size = 300 # embedding_dimension
 #n_hidden = 512 # number of units in RNN cell
 #learning_rate = .001
@@ -41,6 +41,16 @@ train_x = list(df["comment_text"])
 #train_y = list(zip(df["toxic"], df["insult"]))
 train_y = list(zip(df["toxic"], df["severe_toxic"], df["obscene"], df["threat"], df["insult"], df["identity_hate"]))
 print("[+] Imports Complete [+]")
+
+del df
+
+ones_x = []
+ones_y = []
+
+for i in range(len(train_x)):
+    if 1 in train_y[i]:
+        ones_x.append(train_x[i])
+        ones_y.append(train_y[i])
 
 """
 tdf = pd.read_csv(os.getcwd() + "\\test.csv") #, nrows=100)
@@ -169,7 +179,7 @@ def csvWriteRow(yuuge_list, filename):
 
 
 
-h = ['id',' toxic', 'severe_toxic', 'obscene', 'threat', 'insult', 'identity_hate']
+h = ['id', 'toxic', 'severe_toxic', 'obscene', 'threat', 'insult', 'identity_hate']
 outframe = [h]
 
 #_inputs = tf.placeholder(tf.int32, shape=[batch_size, post_size])
@@ -204,7 +214,7 @@ cross_entropy = tf.reduce_mean(pred) # cost, loss
 # Original
 train_step = tf.train.RMSPropOptimizer(0.001, 0.9, centered=True).minimize(cross_entropy)
 """
-train_step = tf.train.RMSPropOptimizer(0.001, 0.9).minimize(cross_entropy)
+#train_step = tf.train.RMSPropOptimizer(0.001, 0.9).minimize(cross_entropy)
 #grads_and_vars = train_Step.compute_gradients(cross_entropy, )
 """
 optimizer = tf.train.GradientDescentOptimizer(.01)
@@ -213,7 +223,7 @@ gradients, _ = tf.clip_by_global_norm(gradients, 5.0)
 train_step = optimizer.apply_gradients(zip(gradients, variables)) #https://stackoverflow.com/questions/36498127/how-to-apply-gradient-clipping-in-tensorflow/43486487
 """
 #train_step = tf.abs([1])
-#train_step = tf.train.AdamOptimizer().minimize(cross_entropy)
+train_step = tf.train.AdamOptimizer().minimize(cross_entropy)
 
 correct_prediction = tf.equal(tf.argmax(_labels, 1), tf.argmax(final_output, 1))
 accuracy = (tf.reduce_mean(tf.cast(correct_prediction, tf.float32)))*100
@@ -231,9 +241,10 @@ times = 6000
 with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
     ct = 0
-    ran_ct = 2000
-    for step in range(1500):
-        x_batch, y_batch, seqlen_batch = get_random_batch(batch, train_x, train_y, nlp)
+    ran_ct = 625
+    initct = 256
+    for step in range(initct): # had [1, 0, 0, 0, 0, 0] figured out around 200
+        x_batch, y_batch, seqlen_batch = get_random_batch(batch, ones_x, ones_y, nlp)
         sess.run(train_step, feed_dict={embed:x_batch, _labels:y_batch, _seqlens:seqlen_batch})
         if step % 5 == 0:
             acc, aut = sess.run([accuracy, final_output_sig], feed_dict={embed:x_batch, _labels:y_batch, _seqlens:seqlen_batch})
@@ -241,9 +252,9 @@ with tf.Session() as sess:
             for i in range(5):
                 print(y_batch[i], aut[i])
             
-            print(str(step) + '/' + str(ran_ct) + " R-init RAN: Accuracy at %d: %.5f" % (step, acc))
+            print(str(step) + '/' + str(initct) + " R-init RAN: Accuracy at %d: %.5f" % (step, acc))
 
-    
+    # Sequenced 
     for step in range(0, len(train_x), batch): #arb num of training epochs i reckon
         #x_batch, y_batch, seqlen_batch = get_random_batch(batch, train_x, train_y, nlp)
         x_batch, y_batch, seqlen_batch = get_seq_batch(step, batch, train_x, train_y, nlp)
@@ -258,12 +269,12 @@ with tf.Session() as sess:
             
             print(str(step) + '/' + str(len(train_x)) + " R0 SEQ: Accuracy at %d: %.5f" % (step, acc))
      
-    
+    # Alternating
     for step in range(0, len(train_x), batch):
         if step % 2 == 0:
             x_batch, y_batch, seqlen_batch = get_seq_batch(step, batch, train_x, train_y, nlp)
         else:
-            x_batch, y_batch, seqlen_batch = get_random_batch(batch, train_x, train_y, nlp)
+            x_batch, y_batch, seqlen_batch = get_random_batch(batch, ones_x, ones_y, nlp)
         sess.run(train_step, feed_dict={embed:x_batch, _labels:y_batch, _seqlens:seqlen_batch})
         if step % 5 == 0:
             acc, aut = sess.run([accuracy, final_output_sig], feed_dict={embed:x_batch, _labels:y_batch, _seqlens:seqlen_batch})
@@ -274,10 +285,10 @@ with tf.Session() as sess:
             #print(str(step) + '/' + str(ran_ct) + " R" + str(e) + " RAN: Accuracy at %d: %.5f" % (step, acc))
             print(str(step) + '/' + str(len(train_x)) + " R1 TOGGLE: Accuracy at %d: %.5f" % (step, acc))
 
-
+    # Alternating
     for step in range(0, len(train_x), batch):
         if step % 2 == 0:
-            x_batch, y_batch, seqlen_batch = get_random_batch(batch, train_x, train_y, nlp)
+            x_batch, y_batch, seqlen_batch = get_random_batch(batch, ones_x, ones_y, nlp)
         else:
             x_batch, y_batch, seqlen_batch = get_seq_batch(step, batch, train_x, train_y, nlp)
 
@@ -290,9 +301,9 @@ with tf.Session() as sess:
             
             #print(str(step) + '/' + str(ran_ct) + " R" + str(e) + " RAN: Accuracy at %d: %.5f" % (step, acc))
             print(str(step) + '/' + str(len(train_x)) + " R2 TOGGLE: Accuracy at %d: %.5f" % (step, acc))
+    
 
-
-
+    """
     for step in range(0, len(train_x), batch):
         if step % 2 == 0:
             x_batch, y_batch, seqlen_batch = get_seq_batch(step, batch, train_x, train_y, nlp)
@@ -307,20 +318,33 @@ with tf.Session() as sess:
             
             #print(str(step) + '/' + str(ran_ct) + " R" + str(e) + " RAN: Accuracy at %d: %.5f" % (step, acc))
             print(str(step) + '/' + str(len(train_x)) + " R3 TOGGLE: Accuracy at %d: %.5f" % (step, acc))
+    """
 
-
-
+    """
+    for step in range(25000):
+        x_batch, y_batch, seqlen_batch = get_random_batch(batch, train_x, train_y, nlp)
+        sess.run(train_step, feed_dict={embed:x_batch, _labels:y_batch, _seqlens:seqlen_batch})
+        if step % 5 == 0:
+            acc, aut = sess.run([accuracy, final_output_sig], feed_dict={embed:x_batch, _labels:y_batch, _seqlens:seqlen_batch})
+            
+            for i in range(5):
+                print(y_batch[i], aut[i])
+            
+            print(str(step) + '/' + str(ran_ct) + " R-init RAN: Accuracy at %d: %.5f" % (step, acc))
+    """
 
     #--------------------------------------------------------------------------------------------------------------------------------
     del train_x
     del train_y
-
+    del ones_x
+    del ones_y
     tdf = pd.read_csv(os.getcwd() + "\\test.csv")
     names = list(tdf["id"])
     test_x = list(tdf["comment_text"])
 
-    tdft = pd.read_csv(os.getcwd() + "\\test_labels.csv")
-    test_y = list(zip(tdft["toxic"], tdft["severe_toxic"], tdft["obscene"], tdft["threat"], tdft["insult"], tdft["identity_hate"]))
+
+    #tdft = pd.read_csv(os.getcwd() + "\\test_labels.csv")
+    #test_y = list(zip(tdft["toxic"], tdft["severe_toxic"], tdft["obscene"], tdft["threat"], tdft["insult"], tdft["identity_hate"]))
 
     step = batch
     for i in range(0, len(test_x), step):
@@ -332,7 +356,7 @@ with tf.Session() as sess:
             buffer.extend(output_example[j])
             outframe.append(buffer)
 
-    csvWriteRow(outframe, "test_sub_" + str(batch) + "_" + str(times) + "_3.csv")
+    csvWriteRow(outframe, "not-fail-hopefully-lel.csv")
     saver.save(sess, os.getcwd() + '/model/test_save_lmao')
 
 
